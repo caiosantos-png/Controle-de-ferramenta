@@ -191,6 +191,13 @@ input::placeholder,textarea::placeholder{color:#5c6779;}
 
 .form-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
 
+.edit-banner{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  background:#0c2f47;border:1px solid var(--accent-dark);color:var(--accent);
+  padding:10px 14px;border-radius:8px;margin-bottom:18px;font-size:13.5px;
+}
+.edit-banner strong{font-family:'Roboto Mono',monospace;}
+
 /* table */
 .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);}
 table{width:100%;border-collapse:collapse;font-size:13.5px;}
@@ -308,8 +315,12 @@ footer{
   <!-- NOVA ENTREGA -->
   <section class="view" id="view-nova">
     <div class="panel">
-      <h2>Registrar entrega de material</h2>
-      <p class="hint">Preencha os dados de quem entrega, quem recebe, e os itens entregues. Depois de salvar, você pode gerar o comprovante em PDF para o técnico assinar.</p>
+      <h2 id="formTitle">Registrar entrega de material</h2>
+      <p class="hint" id="formHint">Preencha os dados de quem entrega, quem recebe, e os itens entregues. Depois de salvar, você pode gerar o comprovante em PDF para o técnico assinar.</p>
+      <div class="edit-banner" id="editBanner" style="display:none;">
+        <span>✏️ Editando a entrega <strong id="editBannerCode"></strong></span>
+        <button class="btn btn-sm" id="btnCancelarEdicao" type="button">Cancelar edição</button>
+      </div>
 
       <div class="grid2">
         <div class="field">
@@ -512,6 +523,8 @@ footer{
   }
   document.getElementById('btnAddItem').addEventListener('click', ()=>addItemRow());
 
+  let editingId = null;
+
   function resetForm(){
     document.getElementById('fResponsavel').value='';
     document.getElementById('fTecnico').value='';
@@ -519,10 +532,43 @@ footer{
     document.getElementById('fObs').value='';
     itemsBox.innerHTML='';
     addItemRow();
+    exitEditMode();
   }
   document.getElementById('btnLimpar').addEventListener('click', resetForm);
 
-  /* ---------- SALVAR ENTREGA ---------- */
+  function enterEditMode(entry){
+    editingId = entry.id;
+    document.getElementById('fResponsavel').value = entry.responsavel;
+    document.getElementById('fTecnico').value = entry.tecnico;
+    document.getElementById('fData').value = entry.data;
+    document.getElementById('fObs').value = entry.obs || '';
+    itemsBox.innerHTML = '';
+    entry.itens.forEach(i=>addItemRow(i.nome, i.qtd));
+
+    document.getElementById('formTitle').textContent = `Editar entrega ${codeFor(entry)}`;
+    document.getElementById('formHint').textContent = 'Ajuste os dados abaixo e salve para atualizar este registro.';
+    document.getElementById('editBanner').style.display = 'flex';
+    document.getElementById('editBannerCode').textContent = codeFor(entry);
+    document.getElementById('btnSalvar').textContent = 'Salvar alterações';
+
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelector('.tab[data-tab="nova"]').classList.add('active');
+    document.querySelectorAll('.view').forEach(v=>v.style.display='none');
+    document.getElementById('view-nova').style.display='block';
+    window.scrollTo({top:0, behavior:'smooth'});
+  }
+
+  function exitEditMode(){
+    editingId = null;
+    document.getElementById('formTitle').textContent = 'Registrar entrega de material';
+    document.getElementById('formHint').textContent = 'Preencha os dados de quem entrega, quem recebe, e os itens entregues. Depois de salvar, você pode gerar o comprovante em PDF para o técnico assinar.';
+    document.getElementById('editBanner').style.display = 'none';
+    document.getElementById('btnSalvar').textContent = 'Salvar entrega';
+  }
+
+  document.getElementById('btnCancelarEdicao').addEventListener('click', resetForm);
+
+  /* ---------- SALVAR ENTREGA (nova ou edição) ---------- */
   document.getElementById('btnSalvar').addEventListener('click', ()=>{
     const responsavel = document.getElementById('fResponsavel').value.trim();
     const tecnico = document.getElementById('fTecnico').value.trim();
@@ -539,6 +585,22 @@ footer{
     if(!responsavel){ showToast("Informe quem está entregando o material."); return; }
     if(!tecnico){ showToast("Informe o técnico que vai receber."); return; }
     if(itens.length===0){ showToast("Adicione ao menos um item."); return; }
+
+    if(editingId){
+      const entry = state.entregas.find(x=>x.id===editingId);
+      if(entry){
+        entry.responsavel = responsavel;
+        entry.tecnico = tecnico;
+        entry.data = data;
+        entry.obs = obs;
+        entry.itens = itens;
+        save();
+        showToast(`Entrega ${codeFor(entry)} atualizada.`);
+        resetForm();
+        renderAll();
+      }
+      return;
+    }
 
     const entry = {
       id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
@@ -583,6 +645,7 @@ footer{
         <td>
           <div class="row-actions">
             <button class="btn btn-sm" data-action="pdf" data-id="${entry.id}">📄 Comprovante</button>
+            <button class="btn btn-sm" data-action="editar" data-id="${entry.id}">✏️ Editar</button>
             ${entry.status==='aberto' ? `<button class="btn btn-sm btn-success" data-action="devolver" data-id="${entry.id}">Devolvido</button>` : ''}
             <button class="btn btn-sm btn-danger btn-ghost" data-action="excluir" data-id="${entry.id}">Excluir</button>
           </div>
@@ -653,6 +716,9 @@ footer{
 
     if(btn.dataset.action === 'pdf'){
       gerarComprovantePdf(entry);
+    }
+    if(btn.dataset.action === 'editar'){
+      enterEditMode(entry);
     }
     if(btn.dataset.action === 'devolver'){
       pendingActionId = id;
