@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Controle de Materiais — Conexão Rastreadores</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=Roboto+Mono:wght@400;500&display=swap');
 
@@ -296,6 +297,7 @@ footer{
     </div>
   </div>
   <div class="topbar-actions">
+    <button class="btn" id="btnExportExcel" title="Gerar uma planilha Excel com todas as entregas">📊 Exportar Excel</button>
     <button class="btn" id="btnExport" title="Salvar backup dos dados em arquivo">⭳ Exportar backup</button>
     <button class="btn" id="btnImport" title="Carregar backup de arquivo">⭱ Importar backup</button>
     <input type="file" id="fileImport" accept=".json" style="display:none">
@@ -758,6 +760,37 @@ footer{
     document.getElementById('modalExcluir').classList.remove('show');
     pendingActionId=null;
     renderAll();
+  });
+
+  /* ---------- EXPORTAR EXCEL ---------- */
+  document.getElementById('btnExportExcel').addEventListener('click', ()=>{
+    if(state.entregas.length === 0){ showToast("Ainda não há entregas registradas."); return; }
+
+    const linhas = [];
+    state.entregas.forEach(entry=>{
+      entry.itens.forEach(item=>{
+        linhas.push({
+          "Código": codeFor(entry),
+          "Data da entrega": fmtDateBR(entry.data),
+          "Técnico": entry.tecnico,
+          "Responsável": entry.responsavel,
+          "Item": item.nome,
+          "Quantidade": item.qtd,
+          "Status": entry.status === 'aberto' ? 'Em aberto' : 'Devolvido',
+          "Data da devolução": entry.status === 'devolvido' ? fmtDateBR(entry.dataDevolucao) : '',
+          "Observações": entry.obs || ''
+        });
+      });
+    });
+
+    const ws = XLSX.utils.json_to_sheet(linhas);
+    ws['!cols'] = [
+      {wch:10},{wch:14},{wch:20},{wch:20},{wch:26},{wch:11},{wch:12},{wch:16},{wch:30}
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Entregas");
+    XLSX.writeFile(wb, `entregas-controle-materiais-${todayISO()}.xlsx`);
+    showToast("Planilha Excel gerada.");
   });
 
   /* ---------- BACKUP ---------- */
