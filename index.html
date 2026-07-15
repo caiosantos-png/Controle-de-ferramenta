@@ -357,6 +357,46 @@ footer{
 }
 
 @media print{ body *{visibility:hidden;} }
+
+/* ================= STATUS FILTER ================= */
+#fStatusHist {
+    color: var(--text);
+    font-weight: 500;
+}
+
+#fStatusHist option {
+    padding: 8px 10px;
+    font-size: 14px;
+}
+
+/* Cor para cada opção */
+#fStatusHist option[value=""] {
+    color: #9aa8bb;           /* Todos - cinza */
+}
+
+#fStatusHist option[value="aberto"] {
+    color: #5ad1ff;           /* Em aberto - azul claro */
+    font-weight: 600;
+}
+
+#fStatusHist option[value="devolvido"] {
+    color: #3fd383;           /* Devolvido - verde */
+    font-weight: 600;
+}
+
+/* Cor do valor selecionado (depois de escolher) */
+#fStatusHist[value=""] {
+    color: #9aa8bb;
+}
+
+#fStatusHist[value="aberto"] {
+    color: #5ad1ff;
+}
+
+#fStatusHist[value="devolvido"] {
+    color: #3fd383;
+}
+
 </style>
 
 </head>
@@ -394,7 +434,6 @@ footer{
   <div class="topbar-actions">
     <span class="user-badge" id="userBadge"></span>
     <button class="btn" id="btnExportExcel" title="Gerar uma planilha Excel com todas as entregas">📊 Exportar Excel</button>
-    <button class="btn" id="btnExport" title="Salvar backup dos dados em arquivo">⭳ Exportar backup</button>
     <button class="btn" id="btnImport" title="Carregar backup de arquivo">⭱ Importar backup</button>
     <input type="file" id="fileImport" accept=".json" style="display:none">
     <button class="btn btn-sm" id="btnLogout" title="Sair da conta">⏻ Sair</button>
@@ -874,10 +913,32 @@ footer{
     return `<ul class="itens-list">${itens.map(i=>`<li>${escapeHtml(i.nome)}${i.qtd>1?` <span class="mono">x${i.qtd}</span>`:''}</li>`).join('')}</ul>`;
   }
 
-  function rowHtml(entry){
+  function rowHtml(entry, isHistorico = false){
     const statusTag = entry.status==='aberto'
       ? `<span class="tag tag-aberto">Em aberto</span>`
       : `<span class="tag tag-devolvido">Devolvido ${fmtDateBR(entry.dataDevolucao)}</span>`;
+
+    let acoesHtml = '';
+
+    if(!isHistorico){
+        // ABA "EM ABERTO" - Mantém todos os botões
+        acoesHtml = `
+          <div class="row-actions">
+            <button class="btn btn-sm" data-action="pdf" data-id="${entry.id}">📄 Comprovante</button>
+            <button class="btn btn-sm" data-action="editar" data-id="${entry.id}">✏️ Editar</button>
+            ${entry.status==='aberto' ? `<button class="btn btn-sm btn-success" data-action="devolver" data-id="${entry.id}">Devolvido</button>` : ''}
+            <button class="btn btn-sm btn-danger btn-ghost" data-action="excluir" data-id="${entry.id}">Excluir</button>
+          </div>
+        `;
+    } else {
+        // ABA "HISTÓRICO" - Apenas o botão Excluir
+        acoesHtml = `
+          <div class="row-actions">
+            <button class="btn btn-sm btn-danger btn-ghost" data-action="excluir" data-id="${entry.id}">Excluir</button>
+          </div>
+        `;
+    }
+
     return `
       <tr>
         <td class="mono">${codeFor(entry)}</td>
@@ -886,17 +947,10 @@ footer{
         <td>${escapeHtml(entry.responsavel)}</td>
         <td>${itensListHtml(entry.itens)}</td>
         <td>${statusTag}</td>
-        <td>
-          <div class="row-actions">
-            <button class="btn btn-sm" data-action="pdf" data-id="${entry.id}">📄 Comprovante</button>
-            <button class="btn btn-sm" data-action="editar" data-id="${entry.id}">✏️ Editar</button>
-            ${entry.status==='aberto' ? `<button class="btn btn-sm btn-success" data-action="devolver" data-id="${entry.id}">Devolvido</button>` : ''}
-            <button class="btn btn-sm btn-danger btn-ghost" data-action="excluir" data-id="${entry.id}">Excluir</button>
-          </div>
-        </td>
+        <td>${acoesHtml}</td>
       </tr>
     `;
-  }
+}
 
   function renderStats(){
     const abertos = state.entregas.filter(e=>e.status==='aberto');
@@ -915,7 +969,7 @@ footer{
     const busca = document.getElementById('fBuscaAberto').value.trim().toLowerCase();
     let list = state.entregas.filter(e=>e.status==='aberto');
     if(busca) list = list.filter(e=>e.tecnico.toLowerCase().includes(busca));
-    document.getElementById('tbodyAberto').innerHTML = list.map(rowHtml).join('');
+    document.getElementById('tbodyAberto').innerHTML = list.map(e => rowHtml(e, false)).join('');
     document.getElementById('emptyAberto').style.display = list.length? 'none':'block';
     document.getElementById('countAberto').textContent = state.entregas.filter(e=>e.status==='aberto').length;
   }
@@ -932,7 +986,7 @@ footer{
         e.itens.some(i=>i.nome.toLowerCase().includes(busca))
       );
     }
-    document.getElementById('tbodyHist').innerHTML = list.map(rowHtml).join('');
+    document.getElementById('tbodyHist').innerHTML = list.map(e => rowHtml(e, true)).join('');
     document.getElementById('emptyHist').style.display = list.length? 'none':'block';
   }
 
